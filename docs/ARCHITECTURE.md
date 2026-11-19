@@ -1,7 +1,6 @@
 # DS Finances — Architecture (lot 0)
 
-> Statut : **proposition à valider**. Aucun code applicatif n'est écrit tant que ce document n'est pas validé.
-> Les points qui demandent votre arbitrage sont regroupés en fin de document (§ 12).
+> Statut : **validé** (lot 0). Les choix par défaut du § 12 sont retenus.
 
 Sommaire
 
@@ -205,8 +204,9 @@ Le fait qu'un total n'ait **jamais** de compte est garanti par la contrainte : u
 ### 4.3 Transferts
 
 ```sql
-transfer (id, out_movement_id → movement UNIQUE, in_movement_id → movement UNIQUE,
-          fee_movement_id NULL → movement, reference NULL)
+transfer (id, reference NULL)
+-- chaque jambe porte movement.transfer_id + movement.transfer_role ('sortie','entree','frais'),
+-- index unique (transfer_id, transfer_role) : exactement une sortie, une entrée, au plus un frais
 ```
 
 Deux opérations liées, nature `transfert`, sur deux comptes. Les frais sont une **troisième opération** réelle (nature `frais_transfert`, rubrique « Frais de transfert »). L'écart de change est **calculé** (§ 5.5), pas stocké.
@@ -337,7 +337,7 @@ audit_log (id, ts, actor, action_group, entity, entity_id,
 ### 4.10 Hors base
 
 - **Brouillons de formulaires** : fichier `drafts.json` à côté de la base (application) ou `localStorage` (aperçu). Ils ne sont jamais lus par le moteur ni inclus dans les totaux.
-- **Index des sauvegardes** : `backups/index.json` (une sauvegarde ne peut pas se décrire elle‑même dans la base qu'elle copie).
+- **Manifestes des sauvegardes** : un fichier `.json` à côté de chaque copie `.sqlite` (une sauvegarde ne peut pas se décrire elle‑même dans la base qu'elle copie). La liste des sauvegardes est reconstituée à partir des manifestes.
 
 ---
 
@@ -580,7 +580,7 @@ Puis « À vérifier » (5 éléments + « Voir tout ») et projets.
 | Moteur | Vitest, snapshots construits en mémoire | règles de calcul (§ 5), invariants (somme des composants) | stockage, interface |
 | Stockage | Vitest + sql.js en Node, base temporaire | migrations, contraintes, triggers, transactions, plans d'écriture des services | comportement de rusqlite |
 | Rust | `cargo test`, fichiers temporaires | migrations réelles, sauvegarde, rotation, restauration, rollback | interface |
-| Interface | Playwright sur l'aperçu navigateur | parcours, protection des saisies, clic → détail | **l'application Mac** |
+| Interface | Vitest + Playwright (Chromium) sur l'aperçu navigateur construit (`npm run test:e2e`) | parcours, protection des saisies, clic → détail | **l'application Mac** |
 | Application Mac | liste de vérifications manuelles fournie à chaque lot | — | — |
 
 - Invariant automatique sur chaque `Figure` produit en test : `value = Σ components` lorsque des composants existent.

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DS Finances — maquette</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --surface: #ffffff; --surface-2: #efeee9; --line: #e2e0d8;
+    --ink: #1d2328; --ink-2: #56606a; --ink-3: #8a929a;
+    --accent: #1f5f6b; --accent-soft: #dbe9eb;
+    --alert: #a8432f; --alert-soft: #f5e3de; --ok: #3d7a4e;
+    --c1: #1f5f6b; --c2: #6a8fa0; --c3: #b5a27a; --c4: #8c6f8e; --c5: #c9c6bb;
+    --radius: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  }
+  :root:not([data-theme="light"]) { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16191c; --surface: #1e2226; --surface-2: #262b30; --line: #30363c;
+      --ink: #e8e9ea; --ink-2: #a8b0b8; --ink-3: #737c85;
+      --accent: #6fb3bf; --accent-soft: #23393d;
+      --alert: #e08a74; --alert-soft: #3a2621; --ok: #7fbf8f;
+      --c1: #6fb3bf; --c2: #4f7889; --c3: #b5a27a; --c4: #a58aa7; --c5: #4a4f55;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.45; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .app { display: grid; grid-template-columns: 210px 1fr; min-height: 100vh; }
+  nav { border-right: 1px solid var(--line); padding: 18px 12px; background: var(--surface); }
+  nav .brand { font-weight: 650; font-size: 15px; padding: 0 10px 16px; }
+  nav a { display: block; padding: 7px 10px; border-radius: 7px; color: var(--ink-2); text-decoration: none; }
+  nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  nav .store { margin-top: 24px; padding: 10px; font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--line); }
+  main { padding: 22px 28px 40px; max-width: 1180px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 650; }
+  .sub { color: var(--ink-2); font-size: 13px; }
+  .zone { margin-top: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 18px 20px; }
+  .zone-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .zone-head h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; margin: 0; color: var(--ink-2); }
+  .zone-head .scope { font-size: 12px; color: var(--ink-3); }
+  h3 { font-size: 14px; margin: 0 0 10px; font-weight: 600; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .kpi { background: var(--surface-2); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; border: 1px solid transparent; }
+  .kpi:hover { border-color: var(--accent); }
+  .kpi .l { color: var(--ink-2); font-size: 12.5px; }
+  .kpi .v { font-size: 24px; font-weight: 600; margin: 2px 0; }
+  .kpi .d { font-size: 12px; color: var(--ink-3); }
+  .kpi .warn { color: var(--alert); }
+  .row { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-top: 18px; }
+  .chart { width: 100%; height: auto; display: block; }
+  .chart text { fill: var(--ink-3); font-size: 11px; font-family: inherit; }
+  .mini { display: grid; gap: 10px; }
+  .mini .kpi .v { font-size: 20px; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--ink-2); margin-top: 6px; flex-wrap: wrap; }
+  .sw { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 4px 11px; font-size: 12.5px; }
+  .chip b { font-weight: 600; }
+  .link { color: var(--accent); font-size: 12.5px; text-decoration: none; cursor: pointer; }
+  .grid3 { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: right; font-weight: 500; color: var(--ink-3); font-size: 12px; padding: 4px 0 6px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  td { padding: 6px 0; border-bottom: 1px solid var(--line); text-align: right; }
+  td.neg { color: var(--alert); }
+  .bar { height: 6px; background: var(--surface-2); border-radius: 3px; margin-top: 3px; position: relative; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 3px; }
+  .bar i.over { background: var(--alert); }
+  .note { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--alert-soft); color: var(--alert); white-space: nowrap; }
+  .tag.n { background: var(--surface-2); color: var(--ink-2); }
+  .proj { margin-bottom: 12px; }
+  .proj .t { display: flex; justify-content: space-between; font-size: 13px; }
+  .absent { color: var(--ink-3); }
+  .detail { position: fixed; right: 18px; top: 18px; width: 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,.12); font-size: 13px; }
+  .detail h4 { margin: 0 0 4px; font-size: 14px; }
+  .detail .def { color: var(--ink-2); font-size: 12.5px; margin-bottom: 10px; }
+  .detail .line { display: flex; justify-content: space-between; padding: 4px 0; }
+  .detail .line.tot { border-top: 1px solid var(--line); font-weight: 600; margin-top: 4px; padding-top: 6px; }
+  .detail .ind { padding-left: 12px; color: var(--ink-2); }
+  .banner { font-size: 12px; background: var(--surface-2); color: var(--ink-2); padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; } nav { display: none; }
+    main { padding: 16px; } .kpis, .row, .grid3 { grid-template-columns: 1fr; }
+    .detail { position: static; width: auto; margin-top: 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav>
+    <div class="brand">DS Finances</div>
+    <a class="on" href="#">Vue d'ensemble</a>
+    <a href="#">Suivi mensuel</a>
+    <a href="#">Comptes</a>
+    <a href="#">Opérations</a>
+    <a href="#">Engagements</a>
+    <a href="#">Crédits</a>
+    <a href="#">Réserve, fonds et projets</a>
+    <a href="#">Patrimoine et projection</a>
+    <a href="#">Paramètres</a>
+    <div class="store">Données : ~/Library/Application Support/fr.dsfinances.app/<br>Dernière sauvegarde : aujourd'hui 14:20</div>
+  </nav>
+
+  <main>
+    <h1>Vue d'ensemble</h1>
+    <div class="sub">Foyer Exemple · jeudi 19 novembre 2026 · données fictives</div>
+
+    <!-- ZONE 1 : SITUATION ET PRÉVISION -->
+    <section class="zone">
+      <div class="zone-head">
+        <h2>Situation et prévision</h2>
+        <span class="scope">Foyer entier · EUR · taux de référence 1 € = 0,9412 CHF (18/11)</span>
+      </div>
+
+      <h3>Situation actuelle</h3>
+      <div class="kpis">
+        <div class="kpi">
+          <div class="l">Liquidités totales</div>
+          <div class="v num">48 216 €</div>
+          <div class="d">4 comptes · soldes du 02/11 au 18/11</div>
+        </div>
+        <div class="kpi" style="border-color:var(--accent)">
+          <div class="l">Non affecté</div>
+          <div class="v num">19 716 €</div>
+          <div class="d">= liquidités − réservé (28 500 €)</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Réserve de sécurité</div>
+          <div class="v num">15 000 €</div>
+          <div class="d">affecté · cible 18 000 € (83 %)</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <h3>Perspectives — liquidités prévues en fin de mois</h3>
+          <svg class="chart" viewBox="0 0 640 220" role="img" aria-label="Courbe de trésorerie prévue">
+            <g stroke="var(--line)" stroke-width="1">
+              <line x1="40" y1="30" x2="630" y2="30"/><line x1="40" y1="90" x2="630" y2="90"/>
+              <line x1="40" y1="150" x2="630" y2="150"/><line x1="40" y1="190" x2="630" y2="190"/>
+            </g>
+            <text x="4" y="34">60 k</text><text x="4" y="94">40 k</text><text x="4" y="154">20 k</text><text x="4" y="194">0</text>
+            <!-- réservé prévu -->
+            <polyline fill="none" stroke="var(--c3)" stroke-width="2" stroke-dasharray="5 4"
+              points="50,104 100,103 150,102 200,101 250,100 300,99 350,112 400,111 450,110 500,109 550,108 600,107"/>
+            <!-- liquidités prévues -->
+            <polyline fill="none" stroke="var(--accent)" stroke-width="2.5"
+              points="50,45 100,50 150,40 200,38 250,62 300,58 350,98 400,92 450,85 500,80 550,74 600,68"/>
+            <g fill="var(--accent)">
+              <circle cx="50" cy="45" r="3"/><circle cx="100" cy="50" r="3"/><circle cx="150" cy="40" r="3"/>
+              <circle cx="200" cy="38" r="3"/><circle cx="250" cy="62" r="3"/><circle cx="300" cy="58" r="3"/>
+              <circle cx="400" cy="92" r="3"/><circle cx="450" cy="85" r="3"/><circle cx="500" cy="80" r="3"/>
+              <circle cx="550" cy="74" r="3"/><circle cx="600" cy="68" r="3"/>
+            </g>
+            <circle cx="350" cy="98" r="5" fill="var(--surface)" stroke="var(--alert)" stroke-width="2"/>
+            <text x="316" y="122" style="fill:var(--alert)">min. 30 667 €</text>
+            <g>
+              <text x="40" y="212">nov.</text><text x="140" y="212">janv.</text><text x="240" y="212">mars</text>
+              <text x="340" y="212">mai</text><text x="440" y="212">juil.</text><text x="540" y="212">sept.</text>
+            </g>
+          </svg>
+          <div class="legend">
+            <span><i class="sw" style="background:var(--accent)"></i>Liquidités prévues</span>
+            <span><i class="sw" style="background:var(--c3)"></i>Réservé prévu (réserve + fonds)</span>
+            <span>Taux d'hypothèse : 1 € = 0,94 CHF</span>
+          </div>
+        </div>
+        <div class="mini">
+          <div class="kpi">
+            <div class="l">Minimum des soldes prévus en fin de mois</div>
+            <div class="v num">30 667 €</div>
+            <div class="d">fin mai 2027 · horizon 12 mois</div>
+          </div>
+          <div class="kpi">
+            <div class="l">Marge après réserve et fonds</div>
+            <div class="v num">1 667 €</div>
+            <div class="d">fin mai 2027 · après paiement « Véhicule »</div>
+          </div>
+          <div class="note">Solde du compte « Livret B » daté du 02/10 (48 jours) : prévision estimée depuis cette date.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ZONE 2 : ANALYSE DE LA PÉRIODE -->
+    <section class="zone">
+      <div class="zone-head">
+        <h2>Analyse de la période</h2>
+        <div class="filters">
+          <span class="chip">Période <b>novembre 2026</b> · en cours</span>
+          <span class="chip">Périmètre <b>Foyer</b></span>
+          <span class="chip">Référence <b>budget actualisé</b></span>
+          <a class="link">Plus d'options ▾</a>
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div>
+          <h3>Budget et réel — dépenses</h3>
+          <table>
+            <thead><tr><th>Famille</th><th>Prévu</th><th>Réel</th><th>Reste attendu</th><th>Écart projeté</th></tr></thead>
+            <tbody>
+              <tr><td>Logement<div class="bar"><i style="width:92%"></i></div></td><td class="num">1 640</td><td class="num">1 510</td><td class="num">130</td><td class="num">0</td></tr>
+              <tr><td>Alimentation<div class="bar"><i style="width:71%"></i></div></td><td class="num">950</td><td class="num">672</td><td class="num">278</td><td class="num">0</td></tr>
+              <tr><td>Transport<div class="bar"><i class="over" style="width:100%"></i></div></td><td class="num">380</td><td class="num">412</td><td class="num">0</td><td class="num neg">+32</td></tr>
+              <tr><td>Enfants<div class="bar"><i style="width:40%"></i></div></td><td class="num">520</td><td class="num">210</td><td class="num">310</td><td class="num">0</td></tr>
+              <tr><td>Crédits — coûts<div class="bar"><i style="width:100%"></i></div></td><td class="num">286</td><td class="num">286</td><td class="num">0</td><td class="num">0</td></tr>
+              <tr><td>Santé<div class="bar"><i style="width:0%"></i></div></td><td class="num">60</td><td class="num absent" title="Aucune opération ni total saisi">—</td><td class="num">60</td><td class="num">0</td></tr>
+            </tbody>
+          </table>
+          <div class="note">Montants en €. Mois en cours : écart projeté = réel + reste attendu − budget actualisé. Capital des crédits (1 214 €) hors consommation, voir Entrées et sorties.</div>
+        </div>
+
+        <div>
+          <h3>Répartition des dépenses</h3>
+          <svg class="chart" viewBox="0 0 200 200" role="img" aria-label="Répartition des dépenses">
+            <g fill="none" stroke-width="26" transform="rotate(-90 100 100)">
+              <circle cx="100" cy="100" r="70" stroke="var(--c1)" stroke-dasharray="190.4 439.8"/>
+              <circle cx="100" cy="100" r="70" stroke="var(--c2)" stroke-dasharray="84.7 439.8" stroke-dashoffset="-190.4"/>
+              <circle cx="100" cy="100" r="70" stroke="var(--c3)" stroke-dasharray="51.9 439.8" stroke-dashoffset="-275.1"/>
+              <circle cx="100" cy="100" r="70" stroke="var(--c4)" stroke-dasharray="36.1 439.8" stroke-dashoffset="-327.0"/>
+              <circle cx="100" cy="100" r="70" stroke="var(--c5)" stroke-dasharray="76.7 439.8" stroke-dashoffset="-363.1"/>
+            </g>
+            <text x="100" y="96" text-anchor="middle" style="fill:var(--ink);font-size:16px;font-weight:600">3 488 €</text>
+            <text x="100" y="114" text-anchor="middle">dépenses nettes</text>
+          </svg>
+          <div class="legend" style="flex-direction:column;gap:4px">
+            <span><i class="sw" style="background:var(--c1)"></i>Logement 43 %</span>
+            <span><i class="sw" style="background:var(--c2)"></i>Alimentation 19 %</span>
+            <span><i class="sw" style="background:var(--c3)"></i>Transport 12 %</span>
+            <span><i class="sw" style="background:var(--c4)"></i>Crédits — coûts 8 %</span>
+            <span><i class="sw" style="background:var(--c5)"></i>Autres 17 %</span>
+          </div>
+          <div class="note">Pourcentages des dépenses nettes du mois (3 488 €). Une famille nette positive (remboursements supérieurs aux dépenses) serait présentée à part, hors dénominateur.</div>
+        </div>
+
+        <div>
+          <h3>Entrées et sorties</h3>
+          <table>
+            <tbody>
+              <tr><td>Revenus structurels</td><td class="num">8 940 €</td></tr>
+              <tr><td>Revenus exceptionnels</td><td class="num">0 €</td></tr>
+              <tr><td>Dépenses de consommation</td><td class="num neg">−3 488 €</td></tr>
+              <tr><td>Capital remboursé</td><td class="num neg">−1 214 €</td></tr>
+              <tr><td>Épargne placée</td><td class="num neg">−500 €</td></tr>
+              <tr><td>Frais de transfert et change</td><td class="num neg">−14 €</td></tr>
+              <tr><td><b>Solde de trésorerie du mois</b></td><td class="num"><b>3 724 €</b></td></tr>
+            </tbody>
+          </table>
+          <div class="note">Transferts internes : neutres, non listés (2 ce mois‑ci).</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ZONE 3 : À VÉRIFIER ET PROJETS -->
+    <div class="row" style="margin-top:22px">
+      <section class="zone" style="margin-top:0">
+        <div class="zone-head"><h2>À vérifier</h2><a class="link">Voir tout (7)</a></div>
+        <ul class="list">
+          <li><span>Assurance habitation — échéance du 05/11 non rapprochée</span><span class="tag">en retard</span></li>
+          <li><span>12 opérations importées « à vérifier » (lot du 17/11)</span><span class="tag n">classement</span></li>
+          <li><span>Octobre 2026 n'est pas clôturé</span><span class="tag n">mois</span></li>
+          <li><span>Solde de référence « Livret B » de 48 jours</span><span class="tag n">solde</span></li>
+          <li><span>Taux EUR/CHF manquant du 14 au 16/11 (taux du 13/11 utilisé)</span><span class="tag n">taux</span></li>
+        </ul>
+      </section>
+      <section class="zone" style="margin-top:0">
+        <div class="zone-head"><h2>Projets</h2><a class="link">Tous</a></div>
+        <div class="proj"><div class="t"><span>Véhicule · mai 2027</span><span class="num">9 000 / 22 000 €</span></div><div class="bar"><i style="width:41%"></i></div></div>
+        <div class="proj"><div class="t"><span>Travaux cuisine · 2028</span><span class="num">4 500 / 15 000 €</span></div><div class="bar"><i style="width:30%"></i></div></div>
+        <div class="note">Montants réservés / objectif. Un paiement de projet consomme la réservation.</div>
+      </section>
+    </div>
+
+    <span class="banner">Maquette statique : un clic sur un chiffre ouvre le panneau « Détail » (exemple à droite pour « Non affecté »).</span>
+  </main>
+</div>
+
+<aside class="detail" aria-label="Détail d'un indicateur">
+  <h4>Non affecté — 19 716 €</h4>
+  <div class="def">Liquidités totales moins le montant réservé (réserve de sécurité + fonds affectés). Au 19/11/2026, en EUR.</div>
+  <div class="line"><span>Liquidités totales</span><span class="num">48 216 €</span></div>
+  <div class="line ind"><span>Courant commun · 18/11</span><span class="num">6 842 €</span></div>
+  <div class="line ind"><span>Courant CHF · 18/11 (5 120 CHF)</span><span class="num">5 440 €</span></div>
+  <div class="line ind"><span>Livret A · 15/11</span><span class="num">22 950 €</span></div>
+  <div class="line ind"><span>Livret B · 02/10 ⚠</span><span class="num">12 984 €</span></div>
+  <div class="line"><span>− Réserve de sécurité (affecté)</span><span class="num">−15 000 €</span></div>
+  <div class="line"><span>− Fonds Véhicule</span><span class="num">−9 000 €</span></div>
+  <div class="line"><span>− Fonds Travaux cuisine</span><span class="num">−4 500 €</span></div>
+  <div class="line tot"><span>Non affecté</span><span class="num">19 716 €</span></div>
+  <div class="note">CHF converti au taux du 18/11 (1 € = 0,9412 CHF), date du solde de référence.</div>
+</aside>
+</body>
+</html>

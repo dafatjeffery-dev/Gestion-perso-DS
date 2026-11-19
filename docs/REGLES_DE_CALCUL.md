@@ -204,3 +204,42 @@ Dépense nette par famille (dépenses − remboursements). Les familles dont le 
 - Un **paiement de projet** est une dépense ordinaire de sa rubrique, rattachée au projet : il diminue les liquidités **et** le réservé du même montant. Le non affecté ne bouge pas.
 
 **Exemple.** Liquidités 31 389,86 € ; réserve 15 000 € ; projet Véhicule 9 000 € → réservé 24 000 €, non affecté 7 389,86 €. Acompte de 3 000 € payé et rattaché au projet : liquidités 28 389,86 €, réservé 21 000 €, non affecté **7 389,86 €** (inchangé).
+
+---
+
+## 9. Prévision de trésorerie [engine/forecast.ts]
+
+Pour chaque compte courant ou d'épargne **ayant un solde constaté**, au dernier jour de chaque mois de l'horizon (24 mois par défaut) :
+
+```
+solde prévu = dernier solde constaté
+            + opérations réelles postérieures à ce solde (jusqu'à aujourd'hui)
+            + flux attendus postérieurs à ce solde et non soldés, datés au plus tard ce jour-là
+```
+
+Flux attendus, chacun compté **une seule fois** :
+
+| Flux | Date retenue | Montant |
+|---|---|---|
+| Échéance à venir (récurrence, ponctuelle, projet) | sa date | reste à payer |
+| Échéance de crédit | sa date | échéance totale (capital + intérêts + assurance + frais) |
+| Échéance passée, compte détaillé, non rapprochée (« en retard ») | aujourd'hui | reste à payer |
+| Échéance passée, compte suivi par soldes | sa date (supposée réalisée) | montant prévu |
+| Enveloppe libre d'un budget | dernier jour du mois | mois en cours : reste de l'enveloppe (méthode de la rubrique) ; mois futurs : enveloppe libre (budget − échéances) |
+
+- Un flux sans compte prévu va sur le compte par défaut de sa devise (le premier compte courant créé dans une devise le devient automatiquement). Sans compte par défaut, il n'est compté que dans le total consolidé, et c'est signalé.
+- Les échéances identifiées ne sont jamais ajoutées en plus du budget : seule l'enveloppe libre (budget − échéances) est un flux de budget.
+- Les comptes sans solde constaté sont **exclus et nommés** (« hors … ») ; ils ne sont jamais comptés pour zéro.
+- Les comptes en CHF sont convertis au **taux d'hypothèse** (dernier taux connu), affiché au-dessus de la courbe.
+
+**Réservé prévu** (fin de mois) = réservé aujourd'hui + versements prévus vers les fonds − paiements prévus des projets (au moins 0 par fonds).
+
+**Minimum des soldes prévus en fin de mois** = plus bas des liquidités prévues sur l'horizon, avec le mois concerné.
+
+**Marge après réserve et fonds** = plus bas, sur l'horizon, de (liquidités prévues − réservé prévu), avec le mois concerné.
+
+**Exemple.** Courant : solde constaté 3 000 € au 31/10 ; dépense réelle de 150 € le 08/11 ; abonnement de 13,99 € du 05/11 non rapproché (en retard) ; salaire de 3 200 € le 25 ; budget Courses 400 €/mois. Fin novembre : 3 000 − 150 − 13,99 + 3 200 − (400 − 150) = **5 786,01 €**. Fin décembre : + 3 200 − 13,99 − 400 = **8 572,02 €**.
+
+## 10. À vérifier [engine/checks.ts]
+
+Conflits total/détail non résolus ; opérations « à vérifier » ou « À classer » ; échéances en retard ; paiements de crédit non ventilés ; mois écoulés non clôturés (3 derniers) ; comptes sans solde constaté ou au solde ancien ; comptes archivés avec un solde ; taux EUR/CHF manquants ou de plus de 7 jours ; non affecté négatif.

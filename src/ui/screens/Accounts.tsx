@@ -130,7 +130,7 @@ function AccountForm({ account, onClose, requestClose }: { account: Account | nu
       if (account) {
         await ref.updateAccount(driver, snap, account.id, { name: v.name, institution: v.institution, owner: v.owner, type: v.type, tracking: v.tracking, currency: v.currency, is_default_for_currency: v.is_default_for_currency });
       } else {
-        await ref.createAccount(driver, snap, { ...v, initialBalance: v.balance_minor !== null ? { ref_date: v.balance_date, amount_minor: v.balance_minor } : undefined });
+        await ref.createAccount(driver, snap, { ...v, is_default_for_currency: v.is_default_for_currency || undefined, initialBalance: v.balance_minor !== null ? { ref_date: v.balance_date, amount_minor: v.balance_minor } : undefined });
       }
       await reload();
       return true;

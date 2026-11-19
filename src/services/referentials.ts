@@ -117,7 +117,9 @@ export async function createAccount(driver: Driver, snap: Snapshot, input: Accou
       owner: input.owner,
       type: input.type,
       tracking: input.tracking ?? 'detaille',
-      is_default_for_currency: input.is_default_for_currency ? 1 : 0,
+      // le premier compte courant d'une devise devient le compte par défaut de cette devise
+      is_default_for_currency:
+        input.is_default_for_currency || (input.is_default_for_currency === undefined && input.type === 'courant' && !snap.accounts.some((a) => a.currency === input.currency && a.is_default_for_currency)) ? 1 : 0,
       sort_order: snap.accounts.length,
     },
     `Compte « ${input.name.trim()} » créé`,

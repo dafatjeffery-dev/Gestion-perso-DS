@@ -9,6 +9,7 @@ import { CommitmentsScreen } from './screens/Commitments';
 import { FundsScreen } from './screens/Funds';
 import { LoansScreen } from './screens/Loans';
 import { MonthlyScreen } from './screens/Monthly';
+import { OverviewScreen } from './screens/Overview';
 import { OperationsScreen } from './screens/Operations';
 import { SettingsScreen } from './screens/Settings';
 
@@ -25,6 +26,7 @@ const NAV: { id: ScreenId; label: string }[] = [
 ];
 
 const SCREENS: Partial<Record<ScreenId, () => JSX.Element>> = {
+  overview: OverviewScreen,
   monthly: MonthlyScreen,
   accounts: AccountsScreen,
   operations: OperationsScreen,

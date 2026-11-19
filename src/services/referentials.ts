@@ -454,15 +454,15 @@ export function readRateCsv(snap: Snapshot, text: string): RateCsvReport {
   return report;
 }
 
-export async function applyRateCsv(driver: Driver, snap: Snapshot, report: RateCsvReport): Promise<number> {
+export async function applyRateCsv(driver: Driver, snap: Snapshot, report: RateCsvReport, source: 'csv' | 'bce' = 'csv'): Promise<number> {
   if (report.errors.length) throw new ValidationError(report.errors.map((e) => ({ field: `ligne ${e.line}`, message: e.message })));
   const p = new Plan();
   let n = 0;
   for (const r of report.rows) {
     if (r.status === 'identique') continue;
     const ex = snap.fxRates.find((x) => x.rate_date === r.rate_date);
-    p.raw('INSERT INTO fx_rate (rate_date, eur_chf_e6, source, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(rate_date) DO UPDATE SET eur_chf_e6 = excluded.eur_chf_e6, source = excluded.source, updated_at = excluded.updated_at', [r.rate_date, r.eur_chf_e6, 'csv', p.ts]);
-    p.audit('fx_rate', r.rate_date, ex ? 'update' : 'create', `Taux du ${formatDateFr(r.rate_date)} importé : ${formatRate(r.eur_chf_e6)}`, ex, { eur_chf_e6: r.eur_chf_e6 });
+    p.raw('INSERT INTO fx_rate (rate_date, eur_chf_e6, source, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(rate_date) DO UPDATE SET eur_chf_e6 = excluded.eur_chf_e6, source = excluded.source, updated_at = excluded.updated_at', [r.rate_date, r.eur_chf_e6, source, p.ts]);
+    p.audit('fx_rate', r.rate_date, ex ? 'update' : 'create', `Taux du ${formatDateFr(r.rate_date)} ${source === 'bce' ? 'récupéré (BCE)' : 'importé'} : ${formatRate(r.eur_chf_e6)}`, ex, { eur_chf_e6: r.eur_chf_e6 });
     n++;
   }
   if (n) await p.run(driver);

@@ -78,7 +78,7 @@ Deux commandes Rust seulement pour les données :
 - `db_query(sql, params) → rows` en lecture seule (connexion ouverte en `query_only`) ;
 - `db_apply(plan) → résultat` : `BEGIN IMMEDIATE`, exécution des instructions, contrôle `PRAGMA foreign_key_check`, `COMMIT` ou `ROLLBACK` complet.
 
-Plus les commandes système : `backup_now`, `list_backups`, `restore_backup`, `data_location`, `read_drafts` / `write_drafts`, `export_file` (boîte de dialogue d'enregistrement).
+Plus les commandes système : `store_status`, `backup_now`, `list_backups`, `stage_restore` / `commit_restore`, `fresh_start`, `read_drafts` / `write_drafts`, `save_file` (après la boîte « Enregistrer sous » du greffon `tauri-plugin-dialog`).
 
 L'adaptateur `sqljs` implémente la même interface. En aperçu navigateur, un bandeau permanent indique : « Aperçu navigateur — données stockées dans ce navigateur (IndexedDB), pas dans l'application Mac ». Les messages de stockage sont fournis par l'adaptateur lui‑même, qui ne peut donc pas annoncer un enregistrement sur le Mac.
 

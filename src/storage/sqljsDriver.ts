@@ -81,9 +81,11 @@ export async function migrate(db: Database, migrations: MigrationFile[]): Promis
 
 export class SqlJsDriver implements Driver {
   private constructor(
-    private readonly db: Database,
+    private db: Database,
     private readonly persistence: Persistence | null,
     private readonly kind: 'navigateur' | 'memoire',
+    private readonly SQL: SqlJsStatic,
+    private readonly migrations: MigrationFile[],
   ) {}
 
   static async create(
@@ -95,7 +97,7 @@ export class SqlJsDriver implements Driver {
     const db = bytes ? new SQL.Database(bytes) : new SQL.Database();
     db.run('PRAGMA foreign_keys = ON');
     await migrate(db, migrations);
-    const d = new SqlJsDriver(db, persistence, persistence ? 'navigateur' : 'memoire');
+    const d = new SqlJsDriver(db, persistence, persistence ? 'navigateur' : 'memoire', SQL, migrations);
     await d.persist();
     return d;
   }
@@ -179,6 +181,28 @@ export class SqlJsDriver implements Driver {
 
   exportBytes(): Uint8Array {
     return this.db.export();
+  }
+
+  exportDatabase(): Uint8Array {
+    return this.db.export();
+  }
+
+  /** Restauration sur copie isolée : contrôle et migration de la copie, puis remplacement. */
+  async restoreDatabase(bytes: Uint8Array): Promise<void> {
+    let candidate: Database;
+    try {
+      candidate = new this.SQL.Database(bytes);
+      candidate.run('PRAGMA foreign_keys = ON');
+      checkIntegrity(candidate);
+      if (!candidate.exec("SELECT name FROM sqlite_master WHERE name = 'schema_migrations'").length) throw new Error('ce fichier n’est pas une base DS Finances');
+      await migrate(candidate, this.migrations);
+    } catch (e) {
+      throw new Error(`Restauration refusée : ${(e as Error).message}`);
+    }
+    const old = this.db;
+    this.db = candidate;
+    old.close();
+    await this.persist();
   }
 
   private drafts = '{}';

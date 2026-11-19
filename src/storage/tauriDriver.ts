@@ -1,7 +1,7 @@
 // Adaptateur de l'application Mac : délègue au backend Rust (src-tauri/store).
 
 import { invoke } from '@tauri-apps/api/core';
-import type { ApplyResult, BackupManifest, Driver, Row, SqlParam, StorageInfo, Stmt } from './driver';
+import type { ApplyResult, BackupManifest, Driver, RestorePreview, Row, SqlParam, StorageInfo, Stmt } from './driver';
 
 interface RustStatus {
   locations: { data_dir: string; database: string; backups_dir: string; drafts: string };
@@ -40,6 +40,15 @@ export class TauriDriver implements Driver {
   }
   writeDrafts(content: string): Promise<void> {
     return invoke<void>('write_drafts', { content });
+  }
+  stageRestore(file: string): Promise<RestorePreview> {
+    return invoke<RestorePreview>('stage_restore', { file });
+  }
+  commitRestore(): Promise<BackupManifest> {
+    return invoke<BackupManifest>('commit_restore');
+  }
+  freshStart(): Promise<BackupManifest> {
+    return invoke<BackupManifest>('fresh_start');
   }
 }
 

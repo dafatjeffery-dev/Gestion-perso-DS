@@ -264,3 +264,17 @@ fn rotation() {
     let kept_old: Vec<_> = (15..40).filter(|dd| !del.contains(&format!("day-{dd}"))).collect();
     assert!(kept_old.len() <= 5, "{kept_old:?}");
 }
+
+#[test]
+fn sauvegarde_autonome_sans_fichiers_annexes() {
+    let d = tempfile::tempdir().unwrap();
+    let mut s = open(d.path());
+    insert_account(&mut s, "X", "EUR");
+    s.backup(Reason::Manuelle).unwrap();
+    let names: Vec<String> = std::fs::read_dir(&s.loc.backups_dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert!(names.iter().all(|n| n.ends_with(".sqlite") || n.ends_with(".json")), "{names:?}");
+    let m = &backup::list(&s.loc.backups_dir).unwrap()[0];
+    let c = rusqlite::Connection::open(s.loc.backups_dir.join(&m.file)).unwrap();
+    let mode: String = c.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+    assert_eq!(mode, "delete");
+}

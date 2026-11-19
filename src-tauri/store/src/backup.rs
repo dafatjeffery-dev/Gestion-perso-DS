@@ -75,8 +75,12 @@ pub fn backup_now(conn: &Connection, dir: &Path, reason: Reason, app_version: &s
     let final_path = dir.join(format!("{base}.sqlite"));
     {
         let mut dst = Connection::open(&tmp)?;
-        let b = rusqlite::backup::Backup::new(conn, &mut dst)?;
-        b.run_to_completion(256, std::time::Duration::from_millis(0), None)?;
+        {
+            let b = rusqlite::backup::Backup::new(conn, &mut dst)?;
+            b.run_to_completion(256, std::time::Duration::from_millis(0), None)?;
+        }
+        // la copie hérite du mode WAL de la source : fichier autonome, sans -wal ni -shm
+        dst.pragma_update(None, "journal_mode", "DELETE")?;
     }
     let counts_src: BTreeMap<String, i64> = table_counts(conn)?.into_iter().collect();
     let (schema_version, counts_copy) = {
@@ -87,6 +91,9 @@ pub fn backup_now(conn: &Connection, dir: &Path, reason: Reason, app_version: &s
     if counts_src != counts_copy {
         let _ = fs::remove_file(&tmp);
         return Err(StoreError::msg("Sauvegarde incomplète : nombre de lignes différent de la base"));
+    }
+    for ext in ["partial-wal", "partial-shm"] {
+        let _ = fs::remove_file(tmp.with_extension(format!("sqlite.{ext}")));
     }
     fs::rename(&tmp, &final_path)?;
     let manifest = Manifest {

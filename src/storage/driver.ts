@@ -46,4 +46,19 @@ export interface Driver {
   listBackups(): Promise<BackupManifest[]>;
   readDrafts(): Promise<string>;
   writeDrafts(content: string): Promise<void>;
+  /** Application Mac : restauration d'une sauvegarde en deux temps, nouveau départ. */
+  stageRestore?(file: string): Promise<RestorePreview>;
+  commitRestore?(): Promise<BackupManifest>;
+  freshStart?(): Promise<BackupManifest>;
+  /** Aperçu navigateur : copie de la base et restauration depuis un fichier. */
+  exportDatabase?(): Uint8Array;
+  restoreDatabase?(bytes: Uint8Array): Promise<void>;
+}
+
+export interface RestorePreview {
+  backup_file: string;
+  created_at: string;
+  schema_version_before: number;
+  schema_version_after: number;
+  table_counts: Record<string, number>;
 }

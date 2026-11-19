@@ -3,7 +3,13 @@ import { formatDateFr } from '../../domain/dates';
 import type { Direction } from '../../domain/types';
 import { formatRate } from '../../engine/fx';
 import * as ref from '../../services/referentials';
-import type { BackupManifest } from '../../storage/driver';
+import type { BackupManifest, RestorePreview, Row } from '../../storage/driver';
+import { formatMoney } from '../../domain/money';
+import { checkFullExport, exportFull, importFull, type FullExport } from '../../export/full';
+import { readableTables, toCsv, toXlsx } from '../../export/readable';
+import { restoreMovement } from '../../services/movements';
+import { fetchEcbRates, ECB_HOST } from '../../services/ecb';
+import { saveFile } from '../files';
 import { Field, Notice, errorText } from '../components/core';
 import { DraftBanner, useProtectedForm } from '../components/guard';
 import { useData } from '../data';
@@ -142,7 +148,7 @@ function Rates() {
   const rates = [...snap.fxRates].sort((a, b) => (a.rate_date < b.rate_date ? 1 : -1));
   return (
     <section className="card">
-      <p className="sub">Taux = nombre de CHF pour 1 €. Réel : taux du jour de l’opération ; soldes : taux de la date du solde ; prévisions : taux d’hypothèse. Modifier un ancien taux recalcule les vues consolidées, jamais les montants d’origine.</p>
+      <p className="sub">Taux = nombre de CHF pour 1 €. La récupération auprès de la BCE est la seule connexion réseau de l’application ; elle n’a lieu que sur votre demande. Réel : taux du jour de l’opération ; soldes : taux de la date du solde ; prévisions : taux d’hypothèse. Modifier un ancien taux recalcule les vues consolidées, jamais les montants d’origine.</p>
       <form className="row" onSubmit={async (e) => {
         e.preventDefault();
         try { const n = await ref.setFxRate(driver, snap, { rate_date: date, eur_chf: rate }); await reload(); setMsg({ kind: 'ok', text: n.message }); setRate(''); } catch (er) { setMsg({ kind: 'error', text: errorText(er) }); }
@@ -150,6 +156,10 @@ function Rates() {
         <input type="date" aria-label="Date du taux" value={date} onChange={(e) => setDate(e.target.value)} />
         <input aria-label="Taux EUR/CHF" placeholder="0,9412" value={rate} onChange={(e) => setRate(e.target.value)} />
         <button type="submit" className="primary">Enregistrer le taux</button>
+        <button type="button" onClick={async () => {
+          if (!confirm(`Récupérer les taux EUR/CHF des 90 derniers jours auprès de la BCE (${ECB_HOST}) ? Seules des dates sont envoyées.`)) return;
+          try { const from = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10); const n = await fetchEcbRates(driver, snap, from, today); await reload(); setMsg({ kind: 'ok', text: `${n} taux récupéré(s) auprès de la BCE.` }); } catch (er) { setMsg({ kind: 'error', text: `Récupération impossible : ${errorText(er)}. Saisissez ou importez les taux.` }); }
+        }}>Récupérer les taux (BCE)…</button>
         <label className="button-like">Importer un CSV (date;taux)
           <input type="file" accept=".csv,text/csv" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) setCsv(ref.readRateCsv(snap, await f.text())); e.target.value = ''; }} />
         </label>
@@ -185,30 +195,124 @@ function Rates() {
 }
 
 function DataSection() {
-  const { driver, info, reload } = useData();
+  const { driver, info, reload, snap, today } = useData();
   const [backups, setBackups] = useState<BackupManifest[]>([]);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'error' | 'warn'; text: string } | null>(null);
+  const [staged, setStaged] = useState<RestorePreview | null>(null);
+  const [freshFile, setFreshFile] = useState<{ data: FullExport; counts: Record<string, number> } | null>(null);
+  const [trash, setTrash] = useState<Row[]>([]);
+  const [journal, setJournal] = useState<Row[]>([]);
   useEffect(() => { void driver.listBackups().then(setBackups); }, [driver, info]);
+  useEffect(() => {
+    void driver.query('SELECT id, granularity, op_date, period_month, amount_minor, currency, label_simple, label_original, deleted_at FROM movement WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 50').then(setTrash);
+    void driver.query('SELECT ts, actor, summary, entity FROM audit_log ORDER BY id DESC LIMIT 50').then(setJournal);
+  }, [driver, snap]);
+  const stamp = today.replace(/-/g, '');
+  const act = async (fn: () => Promise<unknown>) => { setMsg(null); try { await fn(); } catch (e) { setMsg({ kind: 'error', text: errorText(e) }); } };
+  const safetyDownload = async () => {
+    if (driver.exportDatabase) await saveFile(`ds-finances-sauvegarde-${stamp}.sqlite`, driver.exportDatabase(), 'application/vnd.sqlite3');
+  };
   return (
-    <section className="card">
-      <h2>Données et sauvegardes</h2>
-      <p data-testid="storage-location">{info.locationLabel}</p>
-      {info.readOnly && <p className="alert">Base ouverte en lecture seule : elle a été écrite par une version plus récente de l’application.</p>}
-      {info.kind === 'mac' ? (
-        <>
-          <p>Dossier des sauvegardes : <code>{info.backupsPath}</code></p>
-          <p>Dernière sauvegarde : {info.lastBackup ? `${fmtTs(info.lastBackup.created_at)} (${REASONS[info.lastBackup.reason] ?? info.lastBackup.reason})` : 'aucune pour l’instant'}</p>
-          <p className="sub">Sauvegardes automatiques : au démarrage, avant migration ou restauration, toutes les 10 minutes au plus en cas de modification, et à la fermeture.</p>
-          <button onClick={async () => { const m = await driver.backupNow(); setMsg(m ? `Sauvegarde créée : ${m.file}` : null); await reload(); }}>Sauvegarder maintenant</button>
-          {msg && <p className="ok">{msg}</p>}
-          <table className="table">
-            <thead><tr><th>Date</th><th>Motif</th><th>Schéma</th></tr></thead>
-            <tbody>{backups.map((b) => <tr key={b.file}><td>{fmtTs(b.created_at)}</td><td>{REASONS[b.reason] ?? b.reason}</td><td>{b.schema_version}</td></tr>)}</tbody>
-          </table>
-        </>
-      ) : (
-        <p className="sub">En aperçu navigateur, les sauvegardes automatiques de l’application Mac ne s’appliquent pas.</p>
-      )}
-    </section>
+    <>
+      <section className="card">
+        <h2>Emplacement des données et sauvegardes</h2>
+        <p data-testid="storage-location">{info.locationLabel}</p>
+        {info.readOnly && <p className="alert">Base ouverte en lecture seule : elle a été écrite par une version plus récente de l’application.</p>}
+        {info.kind === 'mac' ? (
+          <>
+            <p>Dossier des sauvegardes : <code>{info.backupsPath}</code></p>
+            <p>Dernière sauvegarde : {info.lastBackup ? `${fmtTs(info.lastBackup.created_at)} (${REASONS[info.lastBackup.reason] ?? info.lastBackup.reason})` : 'aucune pour l’instant'}</p>
+            <p className="sub">Automatiques : au démarrage, avant migration, restauration ou nouveau départ, au plus toutes les 10 minutes après des modifications, et à la fermeture. Conservées : les 10 plus récentes, une par jour sur 14 jours, une par semaine sur 8 semaines, une par mois sur 12 mois.</p>
+            <button onClick={() => act(async () => { const m = await driver.backupNow(); setMsg(m ? { kind: 'ok', text: `Sauvegarde créée : ${m.file}` } : null); await reload(); })}>Sauvegarder maintenant</button>
+            <table className="table">
+              <thead><tr><th>Date</th><th>Motif</th><th>Schéma</th><th className="num">Opérations</th><th></th></tr></thead>
+              <tbody>{backups.map((b) => (
+                <tr key={b.file}><td>{fmtTs(b.created_at)}</td><td>{REASONS[b.reason] ?? b.reason}</td><td>{b.schema_version}</td><td className="num">{b.table_counts.movement ?? '—'}</td>
+                  <td><button onClick={() => act(async () => setStaged(await driver.stageRestore!(b.file)))}>Restaurer…</button></td></tr>
+              ))}</tbody>
+            </table>
+          </>
+        ) : (
+          <>
+            <p className="sub">En aperçu navigateur, il n’y a pas de sauvegarde automatique : téléchargez une copie de la base.</p>
+            <div className="actions">
+              <button onClick={() => act(safetyDownload)}>Télécharger une sauvegarde (.sqlite)</button>
+              <label className="button-like">Restaurer depuis un fichier .sqlite…
+                <input type="file" accept=".sqlite,.db" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void act(async () => {
+                  if (!confirm('Restaurer ce fichier ? Une copie de l’état actuel sera d’abord téléchargée.')) return;
+                  await safetyDownload();
+                  await driver.restoreDatabase!(new Uint8Array(await f.arrayBuffer()));
+                  await reload();
+                  setMsg({ kind: 'ok', text: `Base restaurée depuis « ${f.name} ».` });
+                }); }} />
+              </label>
+            </div>
+          </>
+        )}
+        {staged && (
+          <Notice kind="warn">
+            <p>Restaurer la sauvegarde du {fmtTs(staged.created_at)} ? Elle a été vérifiée sur une copie isolée{staged.schema_version_before !== staged.schema_version_after ? ` et migrée du schéma ${staged.schema_version_before} au ${staged.schema_version_after}` : ''}.</p>
+            <p>Contenu : {staged.table_counts.movement ?? 0} opération(s) et total(aux), {staged.table_counts.account ?? 0} compte(s), {staged.table_counts.import_batch ?? 0} lot(s) d’import, {staged.table_counts.recurrence ?? 0} récurrence(s).</p>
+            <p>L’état actuel sera sauvegardé juste avant (« avant restauration »).</p>
+            <button className="primary" onClick={() => act(async () => { await driver.commitRestore!(); setStaged(null); await reload(); setMsg({ kind: 'ok', text: 'Sauvegarde restaurée.' }); })}>Restaurer</button>
+            <button onClick={() => setStaged(null)}>Annuler</button>
+          </Notice>
+        )}
+        {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+      </section>
+
+      <section className="card">
+        <h2>Exports</h2>
+        <div className="actions">
+          <button onClick={() => act(async () => { await saveFile(`ds-finances-export-complet-${stamp}.json`, JSON.stringify(await exportFull(driver)), 'application/json'); })}>Export complet (JSON, réimportable)</button>
+          <button onClick={() => act(async () => { await saveFile(`ds-finances-${stamp}.xlsx`, await toXlsx(readableTables(snap, today)), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); })}>Exports lisibles (XLSX)</button>
+          {readableTables(snap, today).map((t) => (
+            <button key={t.name} onClick={() => act(async () => { await saveFile(`ds-finances-${t.name.toLowerCase()}-${stamp}.csv`, toCsv(t), 'text/csv'); })}>{t.name} (CSV)</button>
+          ))}
+        </div>
+        <p className="sub small">L’export complet contient toutes les tables (brouillons exceptés). Les exports lisibles contiennent les opérations, les totaux mensuels, les budgets et les échéanciers des crédits ; ils ne contiennent pas les lignes calculées (écarts de change, ventilation des paiements de crédit, prévisions).</p>
+        <h3>Nouveau départ à partir d’un export complet</h3>
+        <p className="sub">Remplace toutes les données par celles de l’export, après une sauvegarde de l’état actuel.</p>
+        <label className="button-like">Choisir un export complet (.json)…
+          <input type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void act(async () => {
+            const data = JSON.parse(await f.text()) as FullExport;
+            const c = await checkFullExport(driver, data);
+            if (!c.ok) throw new Error(c.errors.join(' '));
+            setFreshFile({ data, counts: c.counts });
+          }); }} />
+        </label>
+        {freshFile && (
+          <Notice kind="warn">
+            <p>Export du {fmtTs(freshFile.data.exported_at)} : {freshFile.counts.movement} mouvement(s), {freshFile.counts.account} compte(s). Toutes les données actuelles seront remplacées (une sauvegarde est faite avant).</p>
+            <button className="danger" onClick={() => act(async () => {
+              if (driver.freshStart) await driver.freshStart();
+              else await safetyDownload();
+              await importFull(driver, freshFile.data);
+              setFreshFile(null);
+              await reload();
+              setMsg({ kind: 'ok', text: 'Données remplacées par l’export.' });
+            })}>Remplacer les données</button>
+            <button onClick={() => setFreshFile(null)}>Annuler</button>
+          </Notice>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Corbeille</h2>
+        {trash.length === 0 && <p className="sub">Vide.</p>}
+        <table className="table"><tbody>{trash.map((m) => (
+          <tr key={String(m.id)}><td>{m.granularity === 'total' ? `Total ${String(m.period_month)}` : formatDateFr(String(m.op_date))}</td><td>{String(m.label_simple ?? m.label_original ?? '')}</td>
+            <td className="num">{formatMoney(Number(m.amount_minor), m.currency as 'EUR')}</td>
+            <td><button onClick={() => act(async () => { await restoreMovement(driver, Number(m.id)); await reload(); })}>Restaurer</button></td></tr>
+        ))}</tbody></table>
+      </section>
+
+      <section className="card">
+        <h2>Journal des modifications (50 dernières)</h2>
+        <table className="table"><tbody>{journal.map((j, i) => (
+          <tr key={i}><td className="nowrap">{fmtTs(String(j.ts))}</td><td>{String(j.actor)}</td><td>{String(j.summary)}</td></tr>
+        ))}</tbody></table>
+      </section>
+    </>
   );
 }

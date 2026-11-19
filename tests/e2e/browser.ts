@@ -21,7 +21,8 @@ export async function startApp(): Promise<{ url: string; browser: Browser; page:
   const url = server.resolvedUrls!.local[0]!;
   const { chromium } = loadPlaywright();
   const browser = await chromium.launch();
-  const page = await browser.newPage({ locale: 'fr-FR', timezoneId: 'Europe/Paris' });
+  const context = await browser.newContext({ locale: 'fr-FR', timezoneId: 'Europe/Paris' });
+  const page = await context.newPage();
   await page.goto(url);
   return {
     url,

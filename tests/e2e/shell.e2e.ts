@@ -12,6 +12,8 @@ describe('aperçu navigateur — coquille', () => {
     const banner = await page.getByRole('status').innerText();
     expect(banner).toContain('Aperçu navigateur');
     expect(banner).toContain('pas dans l\'application Mac');
+    await page.getByRole('button', { name: 'Paramètres' }).click();
+    await page.getByRole('tab', { name: 'Données et sauvegardes' }).click();
     const loc = await page.getByTestId('storage-location').innerText();
     expect(loc).not.toMatch(/enregistrées sur ce Mac/);
   });

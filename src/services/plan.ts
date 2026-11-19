@@ -98,9 +98,21 @@ export class Plan {
     before?: unknown,
     after?: unknown,
   ): void {
+    // Les références à des lignes créées dans le même plan sont résolues par SQLite (json_set),
+    // pour que le journal contienne les vrais identifiants.
+    const withRefs = (v: unknown): { sql: string; params: SqlParam[] } => {
+      if (v === undefined) return { sql: '?', params: [null] };
+      const refs = v && typeof v === 'object' ? Object.entries(v as Record<string, unknown>).filter(([, x]) => x !== null && typeof x === 'object' && '$ref' in (x as object)) : [];
+      if (!refs.length) return { sql: '?', params: [json(v)] };
+      const plain = { ...(v as Record<string, unknown>) };
+      for (const [k] of refs) plain[k] = null;
+      return { sql: `json_set(?${refs.map(() => ', ?, ?').join('')})`, params: [json(plain), ...refs.flatMap(([k, x]) => [`$.${k}`, x as Ref])] };
+    };
+    const b = withRefs(before);
+    const a = withRefs(after);
     this.raw(
-      'INSERT INTO audit_log (ts, actor, action_group, entity, entity_id, action, summary, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [this.ts, this.actor, this.group, entity, typeof id === 'object' ? id : String(id), action, summary, json(before), json(after)],
+      `INSERT INTO audit_log (ts, actor, action_group, entity, entity_id, action, summary, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?, ?, ${b.sql}, ${a.sql})`,
+      [this.ts, this.actor, this.group, entity, typeof id === 'object' ? id : String(id), action, summary, ...b.params, ...a.params],
     );
   }
 

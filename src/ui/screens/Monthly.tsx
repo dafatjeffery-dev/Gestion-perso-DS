@@ -12,6 +12,7 @@ import { useData } from '../data';
 import { natureLabel, naturesFor } from '../labels';
 import { useNav } from '../nav';
 import { CoverageChoice } from './Operations';
+import { statusLabel } from '../status';
 
 const STATE_LABEL = { futur: 'mois futur', en_cours: 'mois en cours — réel partiel', ecoule: 'mois écoulé, non clôturé — chiffres provisoires', cloture: 'mois clôturé' } as const;
 
@@ -91,11 +92,7 @@ export function MonthlyScreen() {
                 <td>{formatDateFr(e.due_date)}</td>
                 <td>{e.label}</td>
                 <td className="num"><Amount value={e.amount_minor} currency={e.currency} /></td>
-                <td>
-                  <span className={`tag ${e.status === 'soldee' ? 'ok' : e.status === 'en_retard' ? '' : 'n'}`}>
-                    {e.status === 'soldee' ? (e.gap ? `soldée (écart ${formatMoney(e.gap, e.currency, { signed: true })})` : 'soldée') : e.status === 'partielle' ? `partielle — reste ${formatMoney(e.remaining, e.currency)}` : e.status === 'en_retard' ? 'en retard' : 'à venir'}
-                  </span>
-                </td>
+                <td><span className={`tag ${statusLabel(e).cls}`}>{statusLabel(e).text}</span></td>
               </tr>
             ))}
           </tbody>

@@ -5,6 +5,7 @@ import { formatMonthFr, lastDay } from '../domain/dates';
 import type { CoverageMode, Currency, IsoDate, Month, Movement, NatureCode } from '../domain/types';
 import { sysRubrique, toBase, type Ctx } from './context';
 import type { RateLookup } from './fx';
+import { installmentComponents, installmentsOf } from './loans';
 
 export type FlowCategory =
   | 'revenu_structurel'
@@ -49,6 +50,8 @@ export interface Line {
   label: string;
   /** Rôle vis-à-vis de la règle de couverture. */
   coverage: 'seul' | CoverageMode;
+  /** Part d'un paiement de crédit ventilée selon l'échéance rapprochée. */
+  creditComponent?: { loan_id: number; seq: number; component: string };
 }
 
 export interface ExcludedLine {
@@ -135,6 +138,7 @@ export function realLines(ctx: Ctx): RealLines {
       for (const m of [...g.ops, ...g.totals]) out.lines.push(lineOf(ctx, m, mode));
     }
   }
+  out.lines = splitCreditPayments(ctx, out.lines);
   out.lines.push(...fxDiffLines(ctx));
   out.lines.sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : (a.date ?? '') < (b.date ?? '') ? -1 : 1));
   return out;
@@ -180,6 +184,69 @@ export function fxDiffLines(ctx: Ctx): Line[] {
       label: t.out.currency === t.in.currency ? 'Écart entre les deux montants du transfert' : `Écart de change ${t.out.currency} → ${t.in.currency}`,
       coverage: 'seul',
     });
+  }
+  return out;
+}
+
+/**
+ * Un paiement rapproché d'une échéance de crédit est ventilé selon cette échéance : capital
+ * (sortie de trésorerie, pas une consommation), intérêts, assurance, frais. La part non
+ * affectée du paiement reste dans sa rubrique d'origine. Le paiement n'est compté qu'une fois.
+ */
+export function splitCreditPayments(ctx: Ctx, lines: Line[]): Line[] {
+  const credits = ctx.snap.reconciliations.filter((r) => r.target_kind === 'credit');
+  if (!credits.length) return lines;
+  const byMovement = new Map<number, typeof credits>();
+  for (const r of credits) byMovement.set(r.movement_id, [...(byMovement.get(r.movement_id) ?? []), r]);
+  const out: Line[] = [];
+  for (const l of lines) {
+    const recs = l.movement_id ? byMovement.get(l.movement_id) : undefined;
+    if (!recs || l.origin !== 'operation') {
+      out.push(l);
+      continue;
+    }
+    const sign = Math.sign(l.amount_minor) || -1;
+    let used = 0;
+    for (const r of recs) {
+      const loan = ctx.snap.loans.find((x) => x.id === r.loan_id);
+      const inst = loan && installmentsOf(ctx, loan).find((i) => i.seq === r.installment_seq);
+      if (!loan || !inst) continue;
+      const comps = installmentComponents(ctx, inst);
+      const total = comps.reduce((s, c) => s + c.amount, 0) || 1;
+      const alloc = Math.min(Math.abs(r.allocated_minor), Math.abs(l.amount_minor) - used);
+      // ventilation au prorata si paiement partiel ; le reste d'arrondi va au plus gros composant
+      let parts = comps.map((c) => ({ ...c, part: alloc === total ? c.amount : Math.floor((c.amount * alloc) / total) }));
+      const diff = alloc - parts.reduce((s, c) => s + c.part, 0);
+      if (diff && parts.length) {
+        const big = parts.reduce((a, b) => (b.part > a.part ? b : a));
+        parts = parts.map((p) => (p === big ? { ...p, part: p.part + diff } : p));
+      }
+      for (const c of parts) {
+        if (!c.part) continue;
+        const rub = ctx.rubriqueByRef.get(c.ref)!;
+        const amount = sign * c.part;
+        const conv = toBase(ctx, amount, l.currency, l.date!);
+        out.push({
+          ...l,
+          key: `${l.key}:cr:${r.installment_seq}:${c.ref}`,
+          rubrique_id: rub.id,
+          nature: c.nature,
+          category: NATURE_CATEGORY[c.nature],
+          amount_minor: amount,
+          base_minor: conv.minor,
+          rate: conv.rate,
+          label: `${loan.label} — échéance ${inst.seq} (${c.label})`,
+          creditComponent: { loan_id: loan.id, seq: inst.seq, component: c.label },
+        });
+      }
+      used += alloc;
+    }
+    const rest = Math.abs(l.amount_minor) - used;
+    if (rest > 0) {
+      const amount = sign * rest;
+      const conv = toBase(ctx, amount, l.currency, l.date!);
+      out.push({ ...l, key: `${l.key}:reste`, amount_minor: amount, base_minor: conv.minor, rate: conv.rate, label: `${l.label} (part non affectée à l’échéance)` });
+    }
   }
   return out;
 }

@@ -9,6 +9,7 @@ import { Amount, Field, Modal, MoneyInput, Notice, errorText } from '../componen
 import { DraftBanner, useGuard, useProtectedForm } from '../components/guard';
 import { AccountSelect, RubriqueSelect } from '../components/pickers';
 import { useData } from '../data';
+import { statusLabel } from '../status';
 import { FREQUENCY, defaultNature, natureLabel, naturesFor, rubriqueLabel } from '../labels';
 
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
@@ -88,7 +89,7 @@ export function CommitmentsScreen() {
                 <td>{formatDateFr(e.due_date)}</td>
                 <td>{e.label}<div className="sub small">{rubriqueLabel(snap, e.rubrique_id)}</div></td>
                 <td className="num"><Amount value={e.amount_minor} currency={e.currency} /></td>
-                <td><span className={`tag ${e.status === 'soldee' ? 'ok' : e.status === 'en_retard' ? '' : 'n'}`}>{e.status === 'soldee' ? 'soldée' : e.status === 'partielle' ? `reste ${formatMoney(e.remaining, e.currency)}` : e.status === 'en_retard' ? 'en retard' : 'à venir'}</span></td>
+                <td><span className={`tag ${statusLabel(e).cls}`}>{statusLabel(e).text}</span></td>
                 <td>{e.status !== 'soldee' && <CancelScheduled id={e.scheduled_item_id!} />}</td>
               </tr>
             ))}

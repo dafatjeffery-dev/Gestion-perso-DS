@@ -14,8 +14,14 @@ export interface Suggestion {
 
 export function suggestTargets(ctx: Ctx, m: Movement, max = 5): Suggestion[] {
   const date = m.op_date ?? `${m.period_month}-15`;
+  const creditFamily = ctx.rubriqueByRef.get('SYS.CREDIT.NON_VENTILEE')?.family_id;
+  const isCreditPayment = ctx.rubrique.get(m.rubrique_id)?.family_id === creditFamily;
   const candidates = expectedBetween(ctx, addDays(date, -45), addDays(date, 45)).filter(
-    (e) => e.kind !== 'credit' && e.rubrique_id === m.rubrique_id && e.currency === m.currency && Math.sign(e.amount_minor) === Math.sign(m.amount_minor) && e.status !== 'soldee',
+    (e) =>
+      (e.kind === 'credit' ? isCreditPayment : e.rubrique_id === m.rubrique_id) &&
+      e.currency === m.currency &&
+      Math.sign(e.amount_minor) === Math.sign(m.amount_minor) &&
+      e.status !== 'soldee',
   );
   const out: Suggestion[] = [];
   for (const e of candidates) {

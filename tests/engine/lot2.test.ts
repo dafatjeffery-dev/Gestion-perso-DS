@@ -261,7 +261,10 @@ describe('cas 6 : budgets, échéances et rapprochement individuel', () => {
   it('mois incomplet : écoulé non clôturé = provisoire, échéance en retard reportée dans le reste du mois en cours', async () => {
     const f = await foyer();
     await eng.setBudgetPlan(f.driver, await f.snap(), { rubrique_id: f.rub.assurance, from_month: '2026-01', monthly_minor: 30000 });
-    await eng.createScheduled(f.driver, await f.snap(), { label: 'Facture d’octobre', due_date: '2026-10-20', amount_minor: -8000, currency: 'EUR', nature: 'depense', rubrique_id: f.rub.assurance });
+    // le Livret A a un solde constaté au 15/10 : une échéance du 20/10 non payée est en retard
+    await eng.createScheduled(f.driver, await f.snap(), { label: 'Facture d’octobre', due_date: '2026-10-20', amount_minor: -8000, currency: 'EUR', nature: 'depense', rubrique_id: f.rub.assurance, planned_account_id: f.acc.livret });
+    // celle du 10/10 est antérieure à ce solde : réputée incluse, pas reportée
+    await eng.createScheduled(f.driver, await f.snap(), { label: 'Facture ancienne', due_date: '2026-10-10', amount_minor: -5000, currency: 'EUR', nature: 'depense', rubrique_id: f.rub.assurance, planned_account_id: f.acc.livret });
     let ctx = buildCtx(await f.snap(), TODAY);
     const oct = trackRubrique(ctx, f.rub.assurance, '2026-10');
     expect(oct.state).toBe('ecoule');

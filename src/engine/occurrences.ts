@@ -13,6 +13,7 @@ import type {
   RecurrenceVersion,
 } from '../domain/types';
 import type { Ctx } from './context';
+import { installmentComponents, installmentsOf } from './loans';
 
 export type TargetKind = 'occurrence' | 'echeance' | 'credit';
 
@@ -41,9 +42,16 @@ export interface Expected {
   closed: boolean;
   /** Reste à payer en valeur absolue (0 si soldée). */
   remaining: number;
-  status: 'soldee' | 'partielle' | 'ouverte' | 'en_retard';
+  /**
+   * soldée ; partielle ; ouverte (à venir) ; en retard (passée, après le dernier solde constaté
+   * de son compte) ; réputée incluse (passée, antérieure ou égale au dernier solde constaté de son
+   * compte : ce solde l'inclut, elle n'est plus attendue).
+   */
+  status: 'soldee' | 'partielle' | 'ouverte' | 'en_retard' | 'incluse';
   /** Écart constaté (payé − attendu, en valeur absolue) quand l'échéance est soldée. */
   gap: number;
+  /** Échéance de crédit : composants (montants positifs) avec leur rubrique et leur nature. */
+  components?: { rubrique_id: number; nature: NatureCode; amount: number; label: string }[];
 }
 
 export const occurrenceKey = (recurrenceId: number, date: IsoDate) => `occ:${recurrenceId}:${date}`;
@@ -113,13 +121,35 @@ export function nominalDates(
   return out;
 }
 
-function settle(e: Omit<Expected, 'allocated' | 'closed' | 'remaining' | 'status' | 'gap' | 'reconciliations'>, recs: Reconciliation[], today: IsoDate): Expected {
+/** Compte sur lequel une échéance est attendue : compte prévu, sinon compte par défaut de sa devise. */
+export function expectedAccount(ctx: Ctx, accountId: number | null, currency: Currency): number | null {
+  if (accountId) return accountId;
+  return ctx.snap.accounts.find((a) => a.is_default_for_currency && a.currency === currency)?.id ?? null;
+}
+
+/** Date du dernier solde constaté (≤ aujourd'hui) du compte de l'échéance. */
+function coverageDate(ctx: Ctx, accountId: number | null, currency: Currency): IsoDate | null {
+  const acc = expectedAccount(ctx, accountId, currency);
+  if (!acc) return null;
+  let best: IsoDate | null = null;
+  for (const b of ctx.snap.balanceRefs) if (b.account_id === acc && b.ref_date <= ctx.today && (!best || b.ref_date > best)) best = b.ref_date;
+  return best;
+}
+
+function settle(ctx: Ctx, e: Omit<Expected, 'allocated' | 'closed' | 'remaining' | 'status' | 'gap' | 'reconciliations'>, recs: Reconciliation[], today: IsoDate): Expected {
   const allocated = recs.reduce((s, r) => s + Math.abs(r.allocated_minor), 0);
   const expectedAbs = Math.abs(e.amount_minor);
   const closed = recs.some((r) => r.closes_target === 1);
   const soldee = closed || allocated >= expectedAbs;
-  const remaining = soldee ? 0 : expectedAbs - allocated;
-  const status = soldee ? 'soldee' : allocated > 0 ? 'partielle' : e.due_date < today ? 'en_retard' : 'ouverte';
+  let status: Expected['status'];
+  if (soldee) status = 'soldee';
+  else if (allocated > 0) status = 'partielle';
+  else if (e.due_date >= today) status = 'ouverte';
+  else {
+    const cov = coverageDate(ctx, e.account_id, e.currency);
+    status = cov && e.due_date <= cov ? 'incluse' : 'en_retard';
+  }
+  const remaining = soldee || status === 'incluse' ? 0 : expectedAbs - allocated;
   return { ...e, reconciliations: recs, allocated, closed, remaining, status, gap: soldee ? allocated - expectedAbs : 0 };
 }
 
@@ -155,7 +185,7 @@ export function expectedBetween(ctx: Ctx, from: IsoDate, to: IsoDate): Expected[
       if (due < from || due > to) continue;
       const key = occurrenceKey(rec.id, date);
       out.push(
-        settle(
+        settle(ctx,
           {
             key,
             kind: 'occurrence',
@@ -184,7 +214,7 @@ export function expectedBetween(ctx: Ctx, from: IsoDate, to: IsoDate): Expected[
     if (s.status !== 'prevue' || s.due_date < from || s.due_date > to) continue;
     const key = echeanceKey(s.id);
     out.push(
-      settle(
+      settle(ctx,
         {
           key,
           kind: 'echeance',
@@ -219,11 +249,12 @@ function loanExpected(ctx: Ctx, from: IsoDate, to: IsoDate, recs: Map<string, Re
   if (!total) return out;
   for (const loan of ctx.snap.loans) {
     if (loan.status !== 'actif') continue;
-    for (const i of ctx.snap.installments) {
-      if (i.loan_id !== loan.id || i.due_date < from || i.due_date > to) continue;
+    for (const i of installmentsOf(ctx, loan)) {
+      if (i.due_date < from || i.due_date > to) continue;
+      const components = installmentComponents(ctx, i).map((c) => ({ rubrique_id: ctx.rubriqueByRef.get(c.ref)!.id, nature: c.nature as NatureCode, amount: c.amount, label: c.label }));
       const key = creditKey(loan.id, i.seq);
-      out.push(
-        settle(
+      out.push({
+        ...settle(ctx,
           {
             key,
             kind: 'credit',
@@ -245,7 +276,36 @@ function loanExpected(ctx: Ctx, from: IsoDate, to: IsoDate, recs: Map<string, Re
           recs.get(key) ?? [],
           ctx.today,
         ),
-      );
+        components,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Pour le suivi par rubrique : une échéance de crédit est remplacée par ses composants
+ * (capital, intérêts, assurance, frais), chacun dans sa rubrique, avec le même état.
+ */
+export function expandCredit(list: Expected[]): Expected[] {
+  const out: Expected[] = [];
+  for (const e of list) {
+    if (e.kind !== 'credit' || !e.components) {
+      out.push(e);
+      continue;
+    }
+    const total = Math.abs(e.amount_minor) || 1;
+    for (const c of e.components) {
+      out.push({
+        ...e,
+        key: `${e.key}:${c.rubrique_id}`,
+        label: `${e.label} (${c.label})`,
+        rubrique_id: c.rubrique_id,
+        nature: c.nature,
+        amount_minor: Math.sign(e.amount_minor || -1) * c.amount,
+        remaining: e.status === 'soldee' ? 0 : Math.round((c.amount * e.remaining) / total),
+        components: undefined,
+      });
     }
   }
   return out;

@@ -4,6 +4,7 @@ import { formatMoney } from '../../domain/money';
 import type { CoverageMode, Movement, NatureCode } from '../../domain/types';
 import { suggestTargets } from '../../engine/reconcile';
 import * as eng from '../../services/engagements';
+import * as fundsSvc from '../../services/funds';
 import * as mv from '../../services/movements';
 import { ValidationError } from '../../services/plan';
 import { createTransfer } from '../../services/transfers';
@@ -316,6 +317,7 @@ function OperationForm({ op, defaultAccount, onClose, requestClose }: { op: Move
           {form.dirty && <p className="sub">Enregistrez d’abord les modifications pour rapprocher.</p>}
         </section>
       )}
+      {op && op.amount_minor < 0 && snap.funds.some((f) => f.status === 'actif') && <FundLink op={op} onError={setGeneral} />}
     </Modal>
   );
 }
@@ -369,5 +371,30 @@ function TransferForm({ onClose, requestClose }: { onClose: () => void; requestC
         </div>
       </form>
     </Modal>
+  );
+}
+
+function FundLink({ op, onError }: { op: Movement; onError: (m: string) => void }) {
+  const { driver, snap, reload, today } = useData();
+  const [fund, setFund] = useState<number | null>(null);
+  const existing = snap.fundConsumptions.find((c) => c.movement_id === op.id);
+  return (
+    <section className="subsection">
+      <h3>Projet</h3>
+      {existing ? (
+        <div className="row-between">
+          <span>Payé sur « {snap.funds.find((f) => f.id === existing.fund_id)?.name} » : {formatMoney(existing.amount_minor, op.currency)} — la réservation est consommée.</span>
+          <button onClick={async () => { await fundsSvc.unconsume(driver, snap, existing.id); await reload(); }}>Détacher</button>
+        </div>
+      ) : (
+        <div className="row">
+          <select aria-label="Projet payé par cette opération" value={fund ?? ''} onChange={(e) => setFund(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">— payé sur un projet ? —</option>
+            {snap.funds.filter((f) => f.status === 'actif' && f.currency === op.currency).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+          <button disabled={!fund} onClick={async () => { try { await fundsSvc.consume(driver, snap, { fund_id: fund!, movement_id: op.id }, today); await reload(); } catch (e) { onError(errorText(e)); } }}>Rattacher</button>
+        </div>
+      )}
+    </section>
   );
 }

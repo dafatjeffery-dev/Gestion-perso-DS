@@ -6,6 +6,8 @@ import { DataProvider, useData } from './data';
 import { NavCtx, type NavParams, type ScreenId } from './nav';
 import { AccountsScreen } from './screens/Accounts';
 import { CommitmentsScreen } from './screens/Commitments';
+import { FundsScreen } from './screens/Funds';
+import { LoansScreen } from './screens/Loans';
 import { MonthlyScreen } from './screens/Monthly';
 import { OperationsScreen } from './screens/Operations';
 import { SettingsScreen } from './screens/Settings';
@@ -27,6 +29,8 @@ const SCREENS: Partial<Record<ScreenId, () => JSX.Element>> = {
   accounts: AccountsScreen,
   operations: OperationsScreen,
   commitments: CommitmentsScreen,
+  loans: LoansScreen,
+  funds: FundsScreen,
   settings: SettingsScreen,
 };
 

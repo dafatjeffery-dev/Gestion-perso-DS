@@ -71,7 +71,9 @@ Les deux jambes d'un transfert ont la nature « transfert interne » : elles son
 - Un ajustement ponctuel peut annuler une occurrence, changer son montant ou sa date.
 - Désactiver ou masquer la rubrique d'une récurrence **n'a aucun effet** sur ses occurrences.
 
-**État d'une échéance** : *soldée* (montant affecté ≥ attendu, ou soldée avec écart accepté), *partielle*, *ouverte*, *en retard* (date passée, rien d'affecté).
+**État d'une échéance** : *soldée* (montant affecté ≥ attendu, ou soldée avec écart accepté), *partielle*, *à venir*, *en retard* (date passée, postérieure au dernier solde constaté de son compte, rien d'affecté), *réputée incluse* (date passée, antérieure ou égale au dernier solde constaté de son compte : ce solde l'inclut déjà, elle n'est plus attendue). Le compte d'une échéance est son compte prévu, sinon le compte par défaut de sa devise.
+
+**Exemple.** Solde du Livret constaté au 15/10. Une facture prévue le 10/10 et non rapprochée est *réputée incluse* ; une facture du 20/10 non rapprochée est *en retard* et reportée dans le reste attendu de novembre. Cela évite qu'une récurrence ou un crédit saisi avec une date de début ancienne ne génère des « retards » fictifs.
 
 **Exemple.** Loyer de 100,00 € le 31 de chaque mois depuis le 31/01 : 28/02, 31/03, 30/04… Évolution à 110,00 € à partir du 01/07 : 100,00 € jusqu'en juin, 110,00 € ensuite.
 
@@ -157,3 +159,48 @@ Les transferts internes ne figurent dans aucune catégorie (leur nombre est indi
 ### Répartition des dépenses (anneau) [`expenseDonut`]
 
 Dépense nette par famille (dépenses − remboursements). Les familles dont le net est un gain sont présentées **à part**. **Dénominateur** = somme des familles en dépense nette positive ; il est écrit sous l'anneau.
+
+---
+
+## 7. Crédits [engine/loans.ts]
+
+### Trois modes
+
+| Mode | Saisie | Échéancier |
+|---|---|---|
+| Simplifié | mensualité hors assurance, capital restant dû à une date, taux facultatif | estimé par le moteur (origine « estimé ») ; sans taux : échéances « non ventilées », capital restant dû constant jusqu'à la prochaine mise à jour |
+| Bancaire | échéancier collé (date ; capital ; intérêts ; assurance ; frais ; capital restant dû) | conservé **tel quel** (origine « banque ») ; seule la cohérence total = somme des composants est contrôlée |
+| Théorique | capital, taux nominal annuel, nombre d'échéances, fréquence, assurance, frais | calculé et enregistré avec la fiche (origine « calculé ») |
+
+### Calcul théorique
+
+- taux périodique *i* = taux nominal annuel / nombre d'échéances par an (12, 4, 2 ou 1) ;
+- échéance constante hors assurance M = P·i / (1 − (1+i)^−n), arrondie au centime (taux nul : P / n) ;
+- intérêts = arrondi(capital restant dû × *i*) ; capital = M − intérêts ; **dernière échéance** : capital = capital restant dû (ajustement d'arrondi) ;
+- assurance : montant fixe, % annuel du capital initial / nb d'échéances par an, ou % annuel du capital restant dû ;
+- frais de dossier : échéance n° 0 une période avant la première échéance.
+
+**Exemple (référence du test).** 200 000 € à 1,85 % sur 240 mois, assurance 0,30 %/an du capital initial : M = 997,62 € ; échéance 1 = 689,29 € de capital + 308,33 € d'intérêts + 50,00 € d'assurance = 1 047,62 € ; échéance 240 = 996,09 + 1,54 + 50,00 = 1 047,63 € ; intérêts totaux 39 428,81 €.
+
+**Limites affichées.** Pas de différé, de taux variable, de remboursement anticipé, d'intérêts intercalaires ni de calcul au jour près. Seul l'échéancier de la banque fait foi.
+
+### Dans les analyses et les prévisions
+
+- Un paiement **rapproché** d'une échéance est ventilé selon elle : **capital** (rubrique « Capital remboursé », catégorie « Capital remboursé » : sortie de trésorerie, pas une consommation), **intérêts**, **assurance**, **frais** (famille Crédits, dépenses de consommation). Un paiement partiel est ventilé au prorata ; la part non affectée reste dans sa rubrique.
+- Un paiement **non rapproché** reste dans « Crédits › Échéance non ventilée » et figure dans « À vérifier ».
+- Si une récurrence est associée au crédit, ses occurrences sont **remplacées** par les échéances du crédit (jamais additionnées).
+- Le suivi mensuel prévoit, dans chaque rubrique, la part de l'échéance qui la concerne.
+- **Capital restant dû** au jour J : celui de la dernière échéance échue (bancaire, théorique) ; en simplifié, capital déclaré diminué du capital estimé des échéances suivantes.
+- **Archiver** retire les échéances futures des prévisions ; **réactiver** les y remet. Aucun paiement n'est recréé (les paiements sont des opérations).
+- Les associations (compte de prélèvement, récurrence) ne sont enregistrées qu'avec la fiche.
+
+---
+
+## 8. Réserve, fonds et projets [engine/funds.ts]
+
+- **Réservé d'un fonds** = Σ affectations datées ≤ J − Σ paiements rattachés datés ≤ J.
+- **Réservé** = réservé de la réserve de sécurité + réservé des fonds et projets actifs (converti en euros).
+- **Non affecté** = Liquidités totales − Réservé (peut être négatif ; c'est alors signalé).
+- Un **paiement de projet** est une dépense ordinaire de sa rubrique, rattachée au projet : il diminue les liquidités **et** le réservé du même montant. Le non affecté ne bouge pas.
+
+**Exemple.** Liquidités 31 389,86 € ; réserve 15 000 € ; projet Véhicule 9 000 € → réservé 24 000 €, non affecté 7 389,86 €. Acompte de 3 000 € payé et rattaché au projet : liquidités 28 389,86 €, réservé 21 000 €, non affecté **7 389,86 €** (inchangé).

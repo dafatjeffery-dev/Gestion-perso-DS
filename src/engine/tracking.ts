@@ -5,7 +5,7 @@ import { addMonths, daysInMonth, firstDay, formatDateFr, lastDay } from '../doma
 import type { Currency, Direction, Month } from '../domain/types';
 import { familyOf, monthState, toBase, type Ctx, type MonthState } from './context';
 import { fig, sumFig, type Figure } from './figure';
-import { expectedBetween, type Expected } from './occurrences';
+import { expandCredit, expectedBetween, type Expected } from './occurrences';
 import { realLines, type Line, type RealLines } from './lines';
 
 export interface BudgetRef {
@@ -88,7 +88,9 @@ function rnr(ctx: Ctx, lines: Line[], direction: Direction, cur: Currency): { r:
     const conv = l.currency === cur ? l.amount_minor : l.base_minor === null ? null : cur === ctx.base ? l.base_minor : toBase(ctx, l.amount_minor, l.currency, l.date ?? ctx.today, cur).minor;
     if (conv === null) return { r: null, rapproche: 0, rnr: null };
     r += oriented(direction, conv);
-    if (l.movement_id) {
+    if (l.creditComponent) {
+      rap += oriented(direction, conv);
+    } else if (l.movement_id) {
       const alloc = ctx.snap.reconciliations.filter((x) => x.movement_id === l.movement_id).reduce((s, x) => s + Math.abs(x.allocated_minor), 0);
       if (alloc > 0) {
         const capped = Math.min(alloc, Math.abs(l.amount_minor));
@@ -111,9 +113,9 @@ export function trackRubrique(ctx: Ctx, rubriqueId: number, m: Month, real: Real
   const cur = ctx.base;
   const from = firstDay(m);
   const to = lastDay(m);
-  const all = expectedAll ?? expectedBetween(ctx, firstDay(addMonths(m, -12)), to);
+  const all = expandCredit(expectedAll ?? expectedBetween(ctx, firstDay(addMonths(m, -12)), to));
   const expected = all.filter((e) => e.rubrique_id === rubriqueId && e.due_date >= from && e.due_date <= to);
-  const late = state === 'en_cours' ? all.filter((e) => e.rubrique_id === rubriqueId && e.due_date < from && e.status !== 'soldee') : [];
+  const late = state === 'en_cours' ? all.filter((e) => e.rubrique_id === rubriqueId && e.due_date < from && (e.status === 'en_retard' || e.status === 'partielle')) : [];
   const lines = real.lines.filter((l) => l.rubrique_id === rubriqueId && l.month === m);
   const conflict = real.conflicts.some((c) => c.rubrique_id === rubriqueId && c.month === m);
 
@@ -125,7 +127,7 @@ export function trackRubrique(ctx: Ctx, rubriqueId: number, m: Month, real: Real
     const amt = convExpected(ctx, e, oriented(direction, e.amount_minor), cur);
     if (amt === null) eMissing = true;
     eFigs.push(fig(`ech.${e.key}`, `${e.label} (${formatDateFr(e.due_date)})`, 'Échéance identifiée', amt, cur, { sources: [srcOf(e)], missingReason: 'taux manquant' }));
-    if (e.status !== 'soldee') {
+    if (e.status !== 'soldee' && e.status !== 'incluse') {
       uFigs.push(fig(`reste.${e.key}`, `${e.label} — non soldée`, 'Montant attendu moins montant déjà affecté', convExpected(ctx, e, e.remaining * Math.sign(oriented(direction, e.amount_minor) || 1), cur), cur, { sources: [srcOf(e)] }));
     }
   }

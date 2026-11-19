@@ -243,3 +243,40 @@ Flux attendus, chacun compté **une seule fois** :
 ## 10. À vérifier [engine/checks.ts]
 
 Conflits total/détail non résolus ; opérations « à vérifier » ou « À classer » ; échéances en retard ; paiements de crédit non ventilés ; mois écoulés non clôturés (3 derniers) ; comptes sans solde constaté ou au solde ancien ; comptes archivés avec un solde ; taux EUR/CHF manquants ou de plus de 7 jours ; non affecté négatif.
+
+---
+
+## 11. Patrimoine et projection [engine/wealth.ts]
+
+### Patrimoine net
+
+**Patrimoine net** = Liquidités totales + Investissements + Biens − Capital restant dû.
+
+- **Investissements** : dernière valeur déclarée datée de chaque compte « Investissement », convertie au taux de sa date.
+- **Biens** : dernière valeur déclarée datée × quote-part du foyer, convertie au taux de sa date.
+- **Capital restant dû** : crédits non soldés (archivés compris), § 7.
+
+**Exemple.** Liquidités 31 389,86 € ; PEA 40 000 € (valeur du 30/09) ; résidence 420 000 € (30/06) ; appartement en Suisse 500 000 CHF à 50 %, taux du 31/10 0,9412 → 265 618,36 € ; capital restant dû 189 000 € → patrimoine net **568 008,22 €**.
+
+### Projection (3 scénarios)
+
+Horizon : de l'année en cours à l'année de la dernière date de retraite renseignée (à défaut 25 ans, signalé). Points annuels.
+
+| Élément | Règle |
+|---|---|
+| Départ | soldes et valeurs déclarées actuels, par devise |
+| Revenus structurels annuels | échéances identifiées de revenus ordinaires sur les 12 prochains mois + enveloppes libres des budgets de revenus ; × (1 + évolution des revenus)^t |
+| Dépenses annuelles | échéances identifiées et enveloppes libres des dépenses sur 12 mois (coûts de crédit compris) ; × (1 + inflation)^t |
+| Capital remboursé | selon les échéanciers des crédits, année par année |
+| Liquidités | + (revenus − dépenses − capital remboursé) chaque année, sans rendement |
+| Placements | × (1 + rendement du scénario) chaque année |
+| Biens | × (1 + évolution immobilière) chaque année |
+| Dettes | capital restant dû au 31/12 selon les échéanciers |
+| CHF | converti au taux EUR/CHF du scénario |
+| Euros constants | nominal / (1 + inflation)^t |
+
+Paramètres par défaut (modifiables) : prudent (inflation 3 %, rendement 1 %, immobilier 0 %, 0,90 CHF/€, revenus +0,5 %), central (2 %, 3 %, 1 %, 0,94, +1,5 %), favorable (1,5 %, 5 %, 2 %, 0,98, +2,5 %).
+
+**Affichage** : fourchette prudent – favorable avec le central en trait, montants arrondis au millier d'euros. Les revenus exceptionnels sont exclus des flux structurels.
+
+**Limites.** Pas d'impôt sur les plus-values, pas de fiscalité de la retraite, pas de baisse de revenus à la retraite, dépenses indexées uniformément sur l'inflation. Ce sont des ordres de grandeur.

@@ -184,3 +184,6 @@ tr.total td { border-top: 1px solid var(--ink-3); }
 .steps li.done::marker { color: var(--ok); }
 .steps li.ko { color: var(--alert); }
 .pre { white-space: pre-wrap; font-size: 12px; background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--line); }
+.chart .band { fill: var(--c1); opacity: .16; stroke: none; }
+.sw.band-sw { background: var(--c1); opacity: .3; height: 10px; }
+.kpi-inline { font-size: 22px; font-weight: 600; }

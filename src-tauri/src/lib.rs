@@ -75,14 +75,16 @@ fn write_drafts(state: State<AppState>, content: String) -> CmdResult<()> {
     Ok(())
 }
 
+/// Écrit un fichier choisi par l'utilisateur dans la boîte « Enregistrer sous » (modèle, export).
 #[tauri::command]
-fn save_text_file(path: String, content: String) -> CmdResult<()> {
-    std::fs::write(path, content)?;
+fn save_file(path: String, bytes: Vec<u8>) -> CmdResult<()> {
+    std::fs::write(path, bytes)?;
     Ok(())
 }
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let store = Store::open(Locations::new(data_dir, None), env!("CARGO_PKG_VERSION"), migrations::embedded())
@@ -108,7 +110,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             db_query, db_apply, store_status, backup_now, list_backups,
-            stage_restore, commit_restore, fresh_start, read_drafts, write_drafts, save_text_file
+            stage_restore, commit_restore, fresh_start, read_drafts, write_drafts, save_file
         ])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de DS Finances");

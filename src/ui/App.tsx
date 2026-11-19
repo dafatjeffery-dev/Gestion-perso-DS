@@ -7,6 +7,7 @@ import { NavCtx, type NavParams, type ScreenId } from './nav';
 import { AccountsScreen } from './screens/Accounts';
 import { CommitmentsScreen } from './screens/Commitments';
 import { FundsScreen } from './screens/Funds';
+import { ImportsScreen } from './screens/Imports';
 import { LoansScreen } from './screens/Loans';
 import { MonthlyScreen } from './screens/Monthly';
 import { OverviewScreen } from './screens/Overview';
@@ -33,6 +34,7 @@ const SCREENS: Partial<Record<ScreenId, () => JSX.Element>> = {
   commitments: CommitmentsScreen,
   loans: LoansScreen,
   funds: FundsScreen,
+  imports: ImportsScreen,
   settings: SettingsScreen,
 };
 

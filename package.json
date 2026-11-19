@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.5",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
     "decimal.js": "^10.4.3",
     "exceljs": "^4.4.0",
     "react": "^18.3.1",

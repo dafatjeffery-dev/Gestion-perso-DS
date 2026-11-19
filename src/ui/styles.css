@@ -180,3 +180,7 @@ textarea { font: inherit; border: 1px solid var(--line); border-radius: 6px; bac
 .proj { margin-bottom: 12px; font-size: 13px; }
 tr.total td { border-top: 1px solid var(--ink-3); }
 @media (max-width: 1100px) { .grid-analysis, .row2 { grid-template-columns: 1fr; } }
+.steps { display: flex; flex-wrap: wrap; gap: 6px 16px; padding-left: 18px; font-size: 13px; }
+.steps li.done::marker { color: var(--ok); }
+.steps li.ko { color: var(--alert); }
+.pre { white-space: pre-wrap; font-size: 12px; background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--line); }
